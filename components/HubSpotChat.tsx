@@ -7,24 +7,7 @@ interface HubSpotChatProps {
   show?: boolean
 }
 
-declare global {
-  interface Window {
-    HubSpotConversations?: {
-      widget: {
-        load: () => void
-        open: () => void
-        close: () => void
-        remove: () => void
-        status: () => { loaded: boolean }
-      }
-    }
-    hsConversationsSettings?: {
-      loadImmediately: boolean
-      inlineEmbedSelector?: string
-    }
-    hsConversationsOnReady?: Array<() => void>
-  }
-}
+// Window types are defined in SmartHubSpotChat.tsx
 
 export default function HubSpotChat({
   portalId,

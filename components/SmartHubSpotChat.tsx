@@ -3,6 +3,18 @@
 import { useEffect, useState } from 'react'
 import HubSpotChatIframe from './HubSpotChatIframe'
 
+declare global {
+  interface Window {
+    compoundDirectTenant?: {
+      slug: string
+      hostname: string
+    }
+    _hsq?: Array<any>
+    hsConversationsSettings?: any
+    HubSpotConversations?: any
+  }
+}
+
 interface SmartHubSpotChatProps {
   show?: boolean
   userEmail?: string
@@ -59,6 +71,25 @@ export default function SmartHubSpotChat({
 
     // Configure HubSpot with context
     if (typeof window !== 'undefined' && shouldShow) {
+      // Set up tenant identification for multi-tenant support
+      window.compoundDirectTenant = {
+        slug: detectedWorkspaceId || subdomain,
+        hostname: hostname,
+      }
+
+      // Initialize HubSpot tracking queue
+      window._hsq = window._hsq || []
+
+      // Identify the session with tenant metadata
+      window._hsq.push([
+        'identify',
+        {
+          workspace_slug: window.compoundDirectTenant.slug,
+          workspace_hostname: window.compoundDirectTenant.hostname,
+        },
+      ])
+
+      // Configure chat widget settings
       window.hsConversationsSettings = {
         loadImmediately: true,
         identificationEmail: userEmail,

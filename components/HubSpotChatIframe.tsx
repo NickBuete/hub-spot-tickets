@@ -34,26 +34,6 @@ export default function HubSpotChatIframe({
     if (!existingScript) {
       document.body.appendChild(script)
     }
-
-    // Open chat when ready
-    window.hsConversationsOnReady = [
-      () => {
-        if (window.HubSpotConversations?.widget) {
-          window.HubSpotConversations.widget.load()
-        }
-      },
-    ]
-
-    // Cleanup function
-    return () => {
-      if (window.HubSpotConversations?.widget) {
-        try {
-          window.HubSpotConversations.widget.remove()
-        } catch (error) {
-          console.error('Error removing HubSpot chat:', error)
-        }
-      }
-    }
   }, [portalId, show])
 
   if (!show) return null

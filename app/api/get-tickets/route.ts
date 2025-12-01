@@ -1,5 +1,6 @@
 import { Client } from '@hubspot/api-client'
 import { NextResponse } from 'next/server'
+import type { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/tickets'
 
 const hubspotClient = new Client({
   accessToken: process.env.HUBSPOT_ACCESS_TOKEN,
@@ -24,18 +25,13 @@ export async function GET(request: Request) {
           filters: [
             {
               propertyName: 'associations.company',
-              operator: 'EQ',
+              operator: 'EQ' as FilterOperatorEnum,
               value: companyId,
             },
           ],
         },
       ],
-      sorts: [
-        {
-          propertyName: 'createdate',
-          direction: 'DESCENDING',
-        },
-      ],
+      sorts: ['createdate'],
       properties: [
         'subject',
         'content',

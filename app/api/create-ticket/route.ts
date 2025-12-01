@@ -1,5 +1,7 @@
 import { Client } from '@hubspot/api-client'
 import { NextResponse } from 'next/server'
+import type { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/contacts'
+import type { AssociationSpecAssociationCategoryEnum } from '@hubspot/api-client/lib/codegen/crm/associations/v4'
 
 const hubspotClient = new Client({
   accessToken: process.env.HUBSPOT_ACCESS_TOKEN,
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
                 filters: [
                   {
                     propertyName: 'email',
-                    operator: 'EQ',
+                    operator: 'EQ' as FilterOperatorEnum,
                     value: email,
                   },
                 ],
@@ -57,11 +59,24 @@ export async function POST(request: Request) {
 
     // Associate ticket with contact
     if (contactId) {
-      await hubspotClient.crm.tickets.associationsApi.create(
-        ticket.id,
+      await hubspotClient.crm.associations.v4.batchApi.create(
+        'tickets',
         'contacts',
-        contactId,
-        [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 16 }]
+        {
+          inputs: [
+            {
+              _from: { id: ticket.id },
+              to: { id: contactId },
+              types: [
+                {
+                  associationCategory:
+                    'HUBSPOT_DEFINED' as AssociationSpecAssociationCategoryEnum,
+                  associationTypeId: 16,
+                },
+              ],
+            },
+          ],
+        }
       )
     }
 

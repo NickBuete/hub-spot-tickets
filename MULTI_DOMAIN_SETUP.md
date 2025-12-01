@@ -3,14 +3,12 @@
 ## Architecture Overview
 
 ### User-Facing (Customer Workspaces Only)
-
 - **Domains:** `cd-{customer}.compound.direct` (e.g., `cd-nick.compound.direct`, `cd-acme.compound.direct`)
 - **Chat Display:** Embedded side panel in the customer's workspace application
 - **Purpose:** Direct support access for customers while using their workspace
 - **HubSpot Chatflow:** "Customer Support"
 
 ### Admin Team (No Embedded Chat)
-
 - **Access Method:** HubSpot inbox at `app.hubspot.com/conversations/inbox`
 - **View:** All customer chats from all workspaces in one unified inbox
 - **Respond:** Through HubSpot interface (desktop or mobile app)
@@ -54,12 +52,14 @@ import SmartHubSpotChat from '@/components/SmartHubSpotChat'
 
 export default function CustomerWorkspaceLayout({ children }) {
   const user = getCurrentUser() // Your auth logic
-
+  
   return (
     <div className="flex h-screen">
       {/* Main workspace content */}
-      <main className="flex-1 overflow-auto">{children}</main>
-
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
+      
       {/* Embedded chat side panel */}
       <aside className="w-96 border-l border-gray-200 bg-white">
         <div className="p-4 border-b">
@@ -131,6 +131,7 @@ export default function SupportPage() {
 }
 ```
 
+
 ### 3. Environment Variables
 
 ```bash
@@ -138,6 +139,43 @@ export default function SupportPage() {
 NEXT_PUBLIC_HUBSPOT_PORTAL_ID=12345678
 NEXT_PUBLIC_CHATFLOW_SUPPORT=your-support-chatflow-id
 ```
+
+### 4. Tenant Identification & HubSpot Session Context
+
+To support multiple customer subdomains with a single shared chatflow, we pass tenant metadata into HubSpot via JavaScript.
+
+Add the following to your root layout (or a global script) so it runs on every customer workspace page. This keeps the chat embedded in the **right-hand side panel** but gives HubSpot full tenant context.
+
+```html
+<script>
+  // Extract the workspace slug from the subdomain (e.g. cd-nick → cd-nick)
+  window.compoundDirectTenant = {
+    slug: window.location.hostname.split('.')[0],
+    hostname: window.location.hostname
+  };
+</script>
+
+<script>
+  // Attach tenant metadata to the HubSpot session
+  window._hsq = window._hsq || [];
+  window._hsq.push([
+    'identify',
+    {
+      workspace_slug: window.compoundDirectTenant.slug,
+      workspace_hostname: window.compoundDirectTenant.hostname
+    }
+  ]);
+</script>
+```
+
+This ensures every embedded chat panel on the **RHS of the workspace UI** is associated with:
+- The correct workspace/tenant (`workspace_slug`)
+- The exact hostname (`workspace_hostname`)
+
+These properties can be used in HubSpot for:
+- Inbox filters
+- Workflows and routing
+- Reporting per workspace/tenant
 
 ---
 
@@ -151,7 +189,6 @@ NEXT_PUBLIC_CHATFLOW_SUPPORT=your-support-chatflow-id
 4. Name: "Customer Support - Workspaces"
 
 **Build Tab:**
-
 - Welcome message: "Hi! How can we help you today?"
 - Type: **Live chat** (direct to agents, no bot needed)
 - Routing: Round robin or specific team members
@@ -161,21 +198,25 @@ NEXT_PUBLIC_CHATFLOW_SUPPORT=your-support-chatflow-id
   - "Technical issue"
   - "Billing question"
 
-**Target Tab:**
 
-- **On specific URLs**: `*.compound.direct/*`
-- This will work for all customer workspace subdomains
-- Alternatively, list each subdomain pattern
+**Target Tab (multi-domain aware):**
+- **Include** → Website URL **matches wildcard**: `https://*.compound.direct/*`  
+  This will show the chatflow on all customer workspace subdomains (e.g. `cd-nick.compound.direct`, `cd-acme.compound.direct`).
+- **Exclude** → Website URL **matches wildcard**: `https://compound.direct/*`  
+  This prevents the customer-support chatflow from appearing on the main marketing site (`compound.direct`), where you may have a separate sales/marketing chatflow.
+
+With this setup:
+- A single shared “Customer Support” chatflow powers all tenant workspaces.
+- You **do not** need to create or maintain separate chatflows per customer domain.
+- Routing, SLAs, and reporting can instead key off `workspace_slug` / `workspace_hostname` properties passed from the embedded RHS chat code.
 
 **Display Tab:**
-
 - Position: Will be controlled by your code (embedded)
 - Color: Match your brand colors
 - Avatar: Your support team photo
 - Language: English (or your preferred language)
 
 **Options Tab:**
-
 - **Business hours**: Set your support availability
   - Example: Monday-Friday, 9am-6pm EST
 - **After hours message**: "We'll respond within 24 hours"
@@ -199,13 +240,11 @@ NEXT_PUBLIC_CHATFLOW_SUPPORT=your-support-chatflow-id
 
 1. Go to **Settings** → **Conversations** → **Inbox**
 2. **Add team members** who will respond to chats:
-
    - Click "Add user"
    - Select support team members
    - Set their roles (Admin, User, etc.)
 
 3. **Configure availability**:
-
    - Each team member can set their status
    - Available, Away, Busy
    - Offline (chats queued for later)
@@ -222,15 +261,14 @@ For intelligent routing based on request type:
 
 1. Go to **Settings** → **Conversations** → **Routing**
 2. Create routing rules:
-
    ```
    If request_type = "screenshare"
      → Route to: Screen Share Specialists
      → Priority: High
-
+   
    If request_type = "technical"
      → Route to: Technical Support Team
-
+   
    If request_type = "billing"
      → Route to: Billing Team
    ```
@@ -247,7 +285,6 @@ For intelligent routing based on request type:
 When a customer on `cd-nick.compound.direct` starts a chat, your team sees:
 
 ### Chat Notification:
-
 ```
 New conversation from nick@customer.com
 Workspace: cd-nick
@@ -256,7 +293,6 @@ Request Type: screenshare
 ```
 
 ### Full Context Panel:
-
 - Customer email and name
 - Company/account information
 - Workspace ID (which subdomain they're on)
@@ -265,7 +301,6 @@ Request Type: screenshare
 - Contact timeline and activity
 
 ### Quick Actions:
-
 - Send canned responses
 - Assign to team member
 - Create ticket from chat
@@ -324,16 +359,14 @@ return (
     </button>
 
     {/* Sliding panel */}
-    <div
-      className={`
+    <div className={`
       fixed right-0 top-0 h-screen w-96 bg-white shadow-2xl z-50 
       transform transition-transform duration-300 ease-in-out
       ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-    `}
-    >
+    `}>
       <div className="flex items-center justify-between p-4 border-b">
         <h3 className="font-bold text-lg">Support Chat</h3>
-        <button
+        <button 
           onClick={() => setIsOpen(false)}
           className="text-gray-400 hover:text-gray-600 text-xl"
         >
@@ -349,26 +382,21 @@ return (
 ### Modal Overlay
 
 ```typescript
-{
-  showChat && (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-2xl w-[600px] h-[700px] overflow-hidden">
-        <div className="p-4 bg-blue-500 text-white flex items-center justify-between">
-          <h3 className="font-bold text-lg">Live Support</h3>
-          <button
-            onClick={() => setShowChat(false)}
-            className="text-white/80 hover:text-white"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="h-[calc(100%-60px)]">
-          <SmartHubSpotChat show={showChat} userEmail={user.email} />
-        </div>
+{showChat && (
+  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-xl shadow-2xl w-[600px] h-[700px] overflow-hidden">
+      <div className="p-4 bg-blue-500 text-white flex items-center justify-between">
+        <h3 className="font-bold text-lg">Live Support</h3>
+        <button onClick={() => setShowChat(false)} className="text-white/80 hover:text-white">
+          ✕
+        </button>
+      </div>
+      <div className="h-[calc(100%-60px)]">
+        <SmartHubSpotChat show={showChat} userEmail={user.email} />
       </div>
     </div>
-  )
-}
+  </div>
+)}
 ```
 
 ---
@@ -378,21 +406,18 @@ return (
 ### Local Development
 
 Add to your `/etc/hosts`:
-
 ```
 127.0.0.1 cd-test.localhost
 127.0.0.1 cd-demo.localhost
 ```
 
 Then test:
-
 - `http://cd-test.localhost:3000` - Should show chat
 - `http://localhost:3000` - Should show chat (dev mode)
 
 ### Verify Context Passing
 
 Open browser console:
-
 ```javascript
 console.log(window.hsConversationsSettings)
 // Should show: workspace_id, company_id, email, etc.
@@ -430,7 +455,7 @@ useEffect(() => {
       setShowChatOffer(true)
     }
   }, 60000)
-
+  
   return () => clearTimeout(timer)
 }, [])
 ```
@@ -446,7 +471,9 @@ The component automatically passes context, but you can customize:
   companyId={user.companyId}
   workspaceId={user.workspaceId}
   requestType={
-    isOnBillingPage ? 'billing' : needsScreenshare ? 'screenshare' : 'general'
+    isOnBillingPage ? 'billing' :
+    needsScreenshare ? 'screenshare' :
+    'general'
   }
 />
 ```
@@ -456,13 +483,11 @@ The component automatically passes context, but you can customize:
 ## Security & Privacy
 
 ### Data Isolation
-
 - Each customer only accesses their workspace chat
 - No cross-workspace data leakage
 - HubSpot handles data security
 
 ### Authentication Required
-
 ```typescript
 // Protect chat access
 if (!isAuthenticated) {
@@ -473,9 +498,7 @@ return <SmartHubSpotChat ... />
 ```
 
 ### Rate Limiting
-
 Implement on your backend to prevent abuse:
-
 ```typescript
 // Limit chat initiations per workspace per hour
 const limit = rateLimiter.check(workspaceId)
@@ -489,7 +512,6 @@ if (limit.exceeded) {
 ## Troubleshooting
 
 **Chat not appearing?**
-
 - ✅ Check Portal ID in `.env.local`
 - ✅ Verify chatflow is published in HubSpot
 - ✅ Ensure domain is whitelisted in chatflow settings
@@ -497,20 +519,17 @@ if (limit.exceeded) {
 - ✅ Try clearing cache and reloading
 
 **Wrong workspace detected?**
-
 - ✅ Verify subdomain starts with `cd-`
 - ✅ Check `workspaceId` prop is passed correctly
 - ✅ Console log `window.location.hostname`
 
 **Team not getting notifications?**
-
 - ✅ Check team member is added to inbox
 - ✅ Verify notification settings are enabled
 - ✅ Ensure chatflow routing is configured
 - ✅ Check availability status (not offline)
 
 **Chat showing on wrong domains?**
-
 - ✅ Review `SmartHubSpotChat` logic
 - ✅ Ensure only customer workspaces (`cd-*.compound.direct`) show chat
 - ✅ Admin/marketing sites should not load the component
