@@ -11,6 +11,7 @@ declare global {
     }
     _hsq?: Array<any>
     hsConversationsSettings?: any
+    hsConversationsOnReady?: Array<() => void>
     HubSpotConversations?: any
   }
 }
@@ -18,6 +19,7 @@ declare global {
 interface SmartHubSpotChatProps {
   show?: boolean
   userEmail?: string
+  userName?: string
   companyId?: string
   workspaceId?: string
   requestType?: string
@@ -26,6 +28,7 @@ interface SmartHubSpotChatProps {
 export default function SmartHubSpotChat({
   show = true,
   userEmail,
+  userName,
   companyId,
   workspaceId,
   requestType,
@@ -80,19 +83,40 @@ export default function SmartHubSpotChat({
       // Initialize HubSpot tracking queue
       window._hsq = window._hsq || []
 
-      // Identify the session with tenant metadata
-      window._hsq.push([
-        'identify',
-        {
-          workspace_slug: window.compoundDirectTenant.slug,
-          workspace_hostname: window.compoundDirectTenant.hostname,
-        },
-      ])
+      // Identify the visitor with email and name
+      if (userEmail) {
+        const identificationData: any = {
+          email: userEmail,
+        }
+
+        if (userName) {
+          identificationData.firstname = userName.split(' ')[0]
+          if (userName.split(' ').length > 1) {
+            identificationData.lastname = userName.split(' ').slice(1).join(' ')
+          }
+        }
+
+        // Add workspace context
+        identificationData.workspace_slug = window.compoundDirectTenant.slug
+        identificationData.workspace_hostname =
+          window.compoundDirectTenant.hostname
+
+        if (companyId) {
+          identificationData.company = companyId
+        }
+
+        console.log('Identifying HubSpot visitor:', identificationData)
+        window._hsq.push(['identify', identificationData])
+
+        // Track page view with identification
+        window._hsq.push(['trackPageView'])
+      }
 
       // Configure chat widget settings
       window.hsConversationsSettings = {
         loadImmediately: true,
         identificationEmail: userEmail,
+        identificationToken: userEmail, // Additional identification
       }
 
       // Add custom fields for context
@@ -121,6 +145,13 @@ export default function SmartHubSpotChat({
         })
       }
 
+      if (userName) {
+        customFields.push({
+          name: 'user_name',
+          value: userName,
+        })
+      }
+
       if (requestType) {
         customFields.push({
           name: 'request_type',
@@ -128,9 +159,12 @@ export default function SmartHubSpotChat({
         })
       }
 
-      // Merge custom fields into settings
+      // Configure chat widget settings with custom properties
+      // Must be set before the HubSpot script loads
       window.hsConversationsSettings = {
-        ...window.hsConversationsSettings,
+        loadImmediately: true,
+        identificationEmail: userEmail,
+        // Merge custom fields as top-level properties
         ...customFields.reduce((acc, field) => {
           acc[field.name] = field.value
           return acc
@@ -143,7 +177,48 @@ export default function SmartHubSpotChat({
       chatflowId,
       shouldShow,
     })
-  }, [show, userEmail, companyId, workspaceId, requestType])
+  }, [show, userEmail, userName, companyId, workspaceId, requestType])
+
+  // Additional effect to ensure identification happens when widget is ready
+  useEffect(() => {
+    if (!show || !userEmail || !userName) return
+
+    const identifyWhenReady = () => {
+      if (typeof window !== 'undefined' && window.HubSpotConversations) {
+        console.log(
+          'Re-identifying user in loaded widget:',
+          userName,
+          userEmail
+        )
+
+        // Force re-identification
+        if (window._hsq) {
+          const identificationData: any = {
+            email: userEmail,
+            firstname: userName.split(' ')[0],
+          }
+
+          if (userName.split(' ').length > 1) {
+            identificationData.lastname = userName.split(' ').slice(1).join(' ')
+          }
+
+          if (companyId) {
+            identificationData.company = companyId
+          }
+
+          window._hsq.push(['identify', identificationData])
+        }
+      }
+    }
+
+    // Try immediately
+    identifyWhenReady()
+
+    // Also try after a short delay to ensure widget is fully loaded
+    const timeout = setTimeout(identifyWhenReady, 1000)
+
+    return () => clearTimeout(timeout)
+  }, [show, userEmail, userName, companyId])
 
   if (!chatConfig.shouldShow || !chatConfig.portalId) {
     return null

@@ -54,6 +54,17 @@ export async function POST(request: Request) {
             ],
           })
         contactId = searchResult.results[0]?.id
+
+        // Update existing contact with current name and phone
+        if (contactId) {
+          await hubspotClient.crm.contacts.basicApi.update(contactId, {
+            properties: {
+              firstname: customerName.split(' ')[0],
+              lastname: customerName.split(' ').slice(1).join(' ') || '',
+              phone: phone,
+            },
+          })
+        }
       }
     }
 

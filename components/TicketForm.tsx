@@ -4,10 +4,11 @@ import { useState } from 'react'
 import SmartHubSpotChat from './SmartHubSpotChat'
 
 export default function TicketForm() {
+  const userName = process.env.NEXT_PUBLIC_USER_ID || ''
+  const userEmail = process.env.NEXT_PUBLIC_USER_EMAIL || ''
+  const companyId = process.env.NEXT_PUBLIC_COMPANY_ID || ''
+
   const [formData, setFormData] = useState({
-    customerName: '',
-    phone: '',
-    email: '',
     issue: '',
     requestType: 'general',
   })
@@ -21,10 +22,24 @@ export default function TicketForm() {
     setMessage('')
 
     try {
+      // For screenshare requests, skip ticket creation and go straight to chat
+      if (formData.requestType === 'screenshare') {
+        setShowChat(true)
+        setLoading(false)
+        return
+      }
+
+      // Create ticket with userName and userEmail from env
       const response = await fetch('/api/create-ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          customerName: userName,
+          email: userEmail,
+          phone: '000-000-0000', // Placeholder phone (can be added to env if needed)
+          issue: formData.issue,
+          requestType: formData.requestType,
+        }),
       })
 
       const data = await response.json()
@@ -32,15 +47,7 @@ export default function TicketForm() {
       if (response.ok) {
         setMessage('Ticket created successfully!')
 
-        // Show chat if it's a screenshare request
-        if (formData.requestType === 'screenshare') {
-          setShowChat(true)
-        }
-
         setFormData({
-          customerName: '',
-          phone: '',
-          email: '',
           issue: '',
           requestType: 'general',
         })
@@ -57,6 +64,12 @@ export default function TicketForm() {
   return (
     <>
       <form onSubmit={handleSubmit} className="max-w-md mx-auto p-6">
+        {/* Display user info */}
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-sm text-gray-600">Logged in as:</p>
+          <p className="font-semibold text-gray-900">{userName}</p>
+        </div>
+
         <div className="mb-4">
           <label className="block mb-2 font-medium">Request Type *</label>
           <select
@@ -74,64 +87,36 @@ export default function TicketForm() {
           </select>
         </div>
 
-        <div className="mb-4">
-          <label className="block mb-2 font-medium">Customer Name *</label>
-          <input
-            type="text"
-            required
-            value={formData.customerName}
-            onChange={(e) =>
-              setFormData({ ...formData, customerName: e.target.value })
-            }
-            className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block mb-2 font-medium">Phone *</label>
-          <input
-            type="tel"
-            required
-            value={formData.phone}
-            onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
-            }
-            className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block mb-2 font-medium">Email *</label>
-          <input
-            type="email"
-            required
-            value={formData.email}
-            onChange={(e) =>
-              setFormData({ ...formData, email: e.target.value })
-            }
-            className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block mb-2 font-medium">Issue Description *</label>
-          <textarea
-            required
-            value={formData.issue}
-            onChange={(e) =>
-              setFormData({ ...formData, issue: e.target.value })
-            }
-            className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            rows={4}
-          />
-        </div>
+        {formData.requestType !== 'screenshare' && (
+          <div className="mb-4">
+            <label className="block mb-2 font-medium">
+              Issue Description *
+            </label>
+            <textarea
+              required
+              value={formData.issue}
+              onChange={(e) =>
+                setFormData({ ...formData, issue: e.target.value })
+              }
+              className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={4}
+              placeholder="Describe your issue or question..."
+            />
+          </div>
+        )}
 
         <button
           type="submit"
           disabled={loading}
           className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
         >
-          {loading ? 'Submitting...' : 'Submit Ticket'}
+          {loading
+            ? formData.requestType === 'screenshare'
+              ? 'Starting chat...'
+              : 'Submitting...'
+            : formData.requestType === 'screenshare'
+            ? 'Start Chat'
+            : 'Submit Ticket'}
         </button>
 
         {message && (
@@ -156,6 +141,7 @@ export default function TicketForm() {
               <button
                 onClick={() => setShowChat(false)}
                 className="text-gray-400 hover:text-gray-600"
+                title="Hide chat panel (conversation continues in widget)"
               >
                 <svg
                   className="w-6 h-6"
@@ -174,11 +160,14 @@ export default function TicketForm() {
             </div>
             <p className="text-gray-600 mb-4">
               A support agent will connect with you shortly to help with your
-              screenshare request.
+              screenshare request. The floating chat widget will remain in the
+              bottom right corner.
             </p>
             <SmartHubSpotChat
               show={showChat}
-              userEmail={formData.email}
+              userEmail={userEmail}
+              userName={userName}
+              companyId={companyId}
               requestType={formData.requestType}
             />
           </div>
