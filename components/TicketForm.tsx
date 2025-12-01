@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import HubSpotChatIframe from './HubSpotChatIframe'
+import SmartHubSpotChat from './SmartHubSpotChat'
 
 export default function TicketForm() {
   const [formData, setFormData] = useState({
@@ -176,9 +176,10 @@ export default function TicketForm() {
               A support agent will connect with you shortly to help with your
               screenshare request.
             </p>
-            <HubSpotChatIframe
-              portalId={process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID || ''}
+            <SmartHubSpotChat
               show={showChat}
+              userEmail={formData.email}
+              requestType={formData.requestType}
             />
           </div>
         </div>
